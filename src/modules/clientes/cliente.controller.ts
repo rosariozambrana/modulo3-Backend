@@ -1,17 +1,28 @@
 import { Request, Response } from 'express';
 import { ClienteService } from './cliente.service';
+import { ClienteInput } from './dto/cliente.dto';
 
 export class ClienteController {
   constructor(private readonly service: ClienteService = new ClienteService()) {}
 
   create = async (req: Request, res: Response) => {
-    const cliente = await this.service.create(req.body);
+    // 🔑 Validamos y transformamos el body al DTO esperado
+    const dto: ClienteInput = {
+      fullName: req.body.fullName,
+      email: req.body.email,
+      phone: req.body.phone ?? null,
+    };
+
+    const cliente = await this.service.create(dto);
     res.status(201).json(cliente);
   };
 
   list = async (req: Request, res: Response) => {
     const result = await this.service.list(req.query as Record<string, string>);
-    res.status(200).json(result);
+    res.status(200).json({
+      items: Array.isArray(result.items) ? result.items : [],
+      meta: result.meta,
+    });
   };
 
   getById = async (req: Request, res: Response) => {
@@ -20,7 +31,13 @@ export class ClienteController {
   };
 
   update = async (req: Request, res: Response) => {
-    const cliente = await this.service.update(req.params.id, req.body);
+    const dto: Partial<ClienteInput> = {
+      fullName: req.body.fullName,
+      email: req.body.email,
+      phone: req.body.phone ?? null,
+    };
+
+    const cliente = await this.service.update(req.params.id, dto);
     res.status(200).json(cliente);
   };
 

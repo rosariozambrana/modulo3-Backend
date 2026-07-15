@@ -3,7 +3,14 @@ import { prisma } from '../../config/prisma';
 
 export class ClienteRepository {
   create(data: Prisma.ClienteCreateInput) {
-    return prisma.cliente.create({ data });
+    return prisma.cliente.create({
+      data: {
+        fullName: data.fullName,
+        email: data.email,
+        phone: data.phone,
+        isActive: true, // 🔑 por defecto activo
+      },
+    });
   }
 
   findMany(where: Prisma.ClienteWhereInput, skip: number, take: number) {
@@ -32,6 +39,9 @@ export class ClienteRepository {
   }
 
   deactivate(id: string) {
-    return prisma.cliente.update({ where: { id }, data: { isActive: false } });
+    return prisma.cliente.update({
+      where: { id },
+      data: { isActive: false },
+    });
   }
 }

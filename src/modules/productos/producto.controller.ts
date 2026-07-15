@@ -11,7 +11,12 @@ export class ProductoController {
 
   list = async (req: Request, res: Response) => {
     const result = await this.service.list(req.query as Record<string, string>);
-    res.status(200).json(result);
+
+    // 🔑 Aseguramos que items sea siempre un array
+    res.status(200).json({
+      items: Array.isArray(result.items) ? result.items : [],
+      meta: result.meta,
+    });
   };
 
   getById = async (req: Request, res: Response) => {
