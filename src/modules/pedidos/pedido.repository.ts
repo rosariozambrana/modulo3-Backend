@@ -37,7 +37,7 @@ export class PedidoRepository {
     });
   }
 
-  createPedido(
+  async createPedido(
     tx: TxClient,
     data: {
       customerId: string;
@@ -49,8 +49,14 @@ export class PedidoRepository {
       data: {
         customerId: data.customerId,
         total: data.total,
+        status: OrderStatus.PENDING, // 🔑 status inicial
         items: {
-          create: data.items,
+          create: data.items.map((it) => ({
+            productId: it.productId,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            subtotal: it.subtotal,
+          })),
         },
       },
       include: includeItems,

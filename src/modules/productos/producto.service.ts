@@ -28,7 +28,8 @@ export class ProductoService {
       this.repository.count(where),
     ]);
 
-    return { items, meta: buildPaginationMeta(total, page, limit) };
+    // 🔑 Aseguramos que items sea siempre un array
+    return { items: Array.isArray(items) ? items : [], meta: buildPaginationMeta(total, page, limit) };
   }
 
   async getById(id: string) {

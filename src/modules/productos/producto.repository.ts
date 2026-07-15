@@ -6,13 +6,15 @@ export class ProductoRepository {
     return prisma.producto.create({ data });
   }
 
-  findMany(where: Prisma.ProductoWhereInput, skip: number, take: number) {
-    return prisma.producto.findMany({
+  async findMany(where: Prisma.ProductoWhereInput, skip: number, take: number) {
+    const result = await prisma.producto.findMany({
       where,
       skip,
       take,
       orderBy: { createdAt: 'desc' },
     });
+    // 🔑 Garantizamos que siempre sea un array
+    return Array.isArray(result) ? result : [];
   }
 
   count(where: Prisma.ProductoWhereInput) {

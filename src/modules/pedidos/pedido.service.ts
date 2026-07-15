@@ -22,14 +22,10 @@ export class PedidoService {
   async create(dto: CreatePedidoDto) {
     return this.repository.runTransaction(async (tx) => {
       const cliente = await this.repository.findClienteById(tx, dto.customerId);
-      if (!cliente) {
-        throw AppError.notFound('El cliente indicado no existe');
-      }
-      if (!cliente.isActive) {
-        throw AppError.conflict('El cliente indicado no está activo');
-      }
+      if (!cliente) throw AppError.notFound('El cliente indicado no existe');
+      if (!cliente.isActive) throw AppError.conflict('El cliente indicado no está activo');
 
-      // Consolida cantidades si el mismo producto aparece más de una vez en la solicitud.
+      // Consolida cantidades si el mismo producto aparece más de una vez
       const quantitiesByProduct = new Map<string, number>();
       for (const item of dto.items) {
         quantitiesByProduct.set(
@@ -48,12 +44,8 @@ export class PedidoService {
 
       for (const [productId, quantity] of quantitiesByProduct.entries()) {
         const producto = await this.repository.findProductoByIdForUpdate(tx, productId);
-        if (!producto) {
-          throw AppError.notFound(`El producto ${productId} no existe`);
-        }
-        if (!producto.isActive) {
-          throw AppError.conflict(`El producto ${producto.name} no está activo`);
-        }
+        if (!producto) throw AppError.notFound(`El producto ${productId} no existe`);
+        if (!producto.isActive) throw AppError.conflict(`El producto ${producto.name} no está activo`);
         if (producto.stock < quantity) {
           throw AppError.conflict(
             `Stock insuficiente para el producto "${producto.name}". Disponible: ${producto.stock}, solicitado: ${quantity}`,
@@ -67,13 +59,11 @@ export class PedidoService {
         orderItems.push({ productId, quantity, unitPrice, subtotal });
       }
 
-      const pedido = await this.repository.createPedido(tx, {
+      return this.repository.createPedido(tx, {
         customerId: dto.customerId,
         total,
         items: orderItems,
       });
-
-      return pedido;
     });
   }
 
@@ -89,28 +79,25 @@ export class PedidoService {
       this.repository.count(where),
     ]);
 
-    return { items, meta: buildPaginationMeta(total, page, limit) };
+    return {
+      items: Array.isArray(items) ? items : [],
+      meta: buildPaginationMeta(total, page, limit),
+    };
   }
 
   async getById(id: string) {
     const pedido = await this.repository.findById(id);
-    if (!pedido) {
-      throw AppError.notFound('Pedido no encontrado');
-    }
+    if (!pedido) throw AppError.notFound('Pedido no encontrado');
     return pedido;
   }
 
   async changeStatus(id: string, dto: ChangeStatusDto) {
     return this.repository.runTransaction(async (tx) => {
       const pedido = await this.repository.findByIdTx(tx, id);
-      if (!pedido) {
-        throw AppError.notFound('Pedido no encontrado');
-      }
+      if (!pedido) throw AppError.notFound('Pedido no encontrado');
 
       const nextStatus = dto.status;
-      if (nextStatus === pedido.status) {
-        return pedido;
-      }
+      if (nextStatus === pedido.status) return pedido;
 
       const allowed = VALID_TRANSITIONS[pedido.status];
       if (!allowed.includes(nextStatus)) {
@@ -119,7 +106,6 @@ export class PedidoService {
         );
       }
 
-      // Al confirmar, se descuenta stock (ya validado en la creación, se revalida por seguridad).
       if (nextStatus === 'CONFIRMED') {
         for (const item of pedido.items) {
           const producto = await this.repository.findProductoByIdForUpdate(tx, item.productId);
@@ -134,7 +120,6 @@ export class PedidoService {
         }
       }
 
-      // Al cancelar un pedido ya confirmado, se restituye el stock descontado.
       if (nextStatus === 'CANCELLED' && pedido.status === 'CONFIRMED') {
         for (const item of pedido.items) {
           await this.repository.incrementStock(tx, item.productId, item.quantity);
