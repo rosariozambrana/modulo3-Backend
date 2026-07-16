@@ -1,0 +1,87 @@
+name: CI - Backend (Build y Artefacto)
+
+# ─────────────────────────────────────────────
+# TRIGGER: ¿Cuándo se activa este pipeline?
+# ─────────────────────────────────────────────
+on:
+  push:
+    branches:
+      - dev-jordan       # Rama de integración del grupo
+      - 'feature/**'     # Cuando alguien sube código a cualquier rama feature/xxx
+  pull_request:
+    branches:
+      - main             # Cuando alguien abre un PR hacia main (bloquea merge si falla)
+      - dev-jordan       # Cuando alguien abre un PR hacia dev-jordan
+
+# ─────────────────────────────────────────────
+# JOBS: Las tareas que ejecuta el pipeline
+# ─────────────────────────────────────────────
+jobs:
+
+  # ═══════════════════════════════════════════
+  # JOB: build-and-artifact
+  # Pasos:
+  #   1. Restore → 2. Build → 3. Publish Artifact
+  # ═══════════════════════════════════════════
+  build-and-artifact:
+    name: 🔨 Build y Generar Artefacto
+    runs-on: ubuntu-latest   # Máquina virtual limpia en GitHub (Linux)
+
+    steps:
+      # ─────────────────────────────────────────
+      # PASO 1: Descargar el código del repositorio
+      # ─────────────────────────────────────────
+      - name: 📥 Checkout - Descargar código
+        uses: actions/checkout@v4
+
+      # ─────────────────────────────────────────
+      # PASO 2: Configurar Node.js versión 20
+      # ─────────────────────────────────────────
+      - name: ⚙️ Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'         # Cachea node_modules para acelerar futuras ejecuciones
+
+      # ─────────────────────────────────────────
+      # PASO 3: RESTORE - Instalar dependencias
+      # npm ci es más estricto que npm install, ideal para CI
+      # Garantiza que se usen exactamente las versiones del package-lock.json
+      # ─────────────────────────────────────────
+      - name: 📦 Restore - Instalar dependencias
+        run: npm ci
+
+      # ─────────────────────────────────────────
+      # PASO 4: Generar cliente de Prisma
+      # Necesario antes del build para que TypeScript
+      # reconozca los tipos generados por Prisma
+      # ─────────────────────────────────────────
+      - name: 🔄 Prisma - Generar cliente
+        run: npx prisma generate
+
+      # ─────────────────────────────────────────
+      # PASO 5: BUILD - Compilar TypeScript a JavaScript
+      # tsc convierte el código TypeScript → JavaScript
+      # El resultado queda en la carpeta /dist
+      # Si hay errores de TypeScript → el pipeline falla
+      # ─────────────────────────────────────────
+      - name: 🏗️ Build - Compilar TypeScript
+        run: npm run build
+
+      # ─────────────────────────────────────────
+      # PASO 6: PUBLISH ARTIFACT - Empaquetar el /dist
+      # GitHub comprime la carpeta /dist en un .zip
+      # y lo guarda por 7 días descargable desde GitHub Actions
+      # El equipo de deploy lo descargará desde aquí
+      # ─────────────────────────────────────────
+      - name: 📤 Publish Artifact - Subir artefacto del build
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-dist              # Nombre del artefacto en GitHub
+          path: |                         # Archivos incluidos en el .zip
+            dist/
+            package.json
+            package-lock.json
+            prisma/
+          retention-days: 7              # Se guarda 7 días
+          if-no-files-found: error       # Falla si no encuentra archivos (build roto)
