@@ -10,7 +10,7 @@ export class ClienteController {
     const dto: CreateClienteDto = {
       fullName: req.body.fullName,
       email: req.body.email,
-      phone: req.body.phone ?? null,
+      phone: req.body.phone && req.body.phone.trim() !== "" ? req.body.phone.trim() : null,
     };
 
     const cliente = await this.service.create(dto);
@@ -34,7 +34,7 @@ export class ClienteController {
     const dto: Partial<CreateClienteDto> = {
       fullName: req.body.fullName,
       email: req.body.email,
-      phone: req.body.phone ?? null,
+      phone: req.body.phone && req.body.phone.trim() !== "" ? req.body.phone.trim() : null,
     };
 
     const cliente = await this.service.update(req.params.id, dto);
