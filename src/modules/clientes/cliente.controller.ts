@@ -1,13 +1,13 @@
 import { Request, Response } from 'express';
 import { ClienteService } from './cliente.service';
-import { ClienteInput } from './dto/cliente.dto';
+import { CreateClienteDto } from './dto/cliente.dto';
 
 export class ClienteController {
   constructor(private readonly service: ClienteService = new ClienteService()) {}
 
   create = async (req: Request, res: Response) => {
     // 🔑 Validamos y transformamos el body al DTO esperado
-    const dto: ClienteInput = {
+    const dto: CreateClienteDto = {
       fullName: req.body.fullName,
       email: req.body.email,
       phone: req.body.phone ?? null,
@@ -31,7 +31,7 @@ export class ClienteController {
   };
 
   update = async (req: Request, res: Response) => {
-    const dto: Partial<ClienteInput> = {
+    const dto: Partial<CreateClienteDto> = {
       fullName: req.body.fullName,
       email: req.body.email,
       phone: req.body.phone ?? null,
