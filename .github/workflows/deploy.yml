@@ -1,0 +1,118 @@
+name: Backend CD
+
+on:
+  workflow_run:
+    workflows: ["Backend CI"]
+    types:
+      - completed
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      actions: read
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      # ─────────────────────────────────────────
+      # PASO 1: Descargar el artefacto del CI
+      # El mismo .zip que generó el job build
+      # ─────────────────────────────────────────
+      - name: Download build artifact from CI
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-dist
+          path: dist-output
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ─────────────────────────────────────────
+      # PASO 2: Preparar el paquete de deploy
+      # Estructura que AWS Elastic Beanstalk espera
+      # ─────────────────────────────────────────
+      - name: Prepare deployment package
+        run: |
+          mkdir -p deploy
+
+          # Copiar código compilado
+          cp -r dist-output/dist deploy/dist
+
+          # Copiar archivos de Prisma (esquema y migraciones)
+          cp -r dist-output/prisma deploy/prisma
+
+          # Copiar dependencias
+          cp dist-output/package.json deploy/package.json
+          cp dist-output/package-lock.json deploy/package-lock.json
+
+          # Crear Procfile: le dice a AWS cómo arrancar la app
+          # AWS leerá este archivo y ejecutará: node dist/server.js
+          echo "web: npm start" > deploy/Procfile
+
+          # Mostrar contenido del paquete de deploy
+          echo "=== Deployment package contents ==="
+          ls -la deploy/
+          echo "Compiled files in dist/:"
+          ls -la deploy/dist/
+
+      # ─────────────────────────────────────────
+      # PASO 3: Comprimir en .zip
+      # Elastic Beanstalk recibe un archivo .zip
+      # ─────────────────────────────────────────
+      - name: Generate deployment package
+        run: |
+          cd deploy
+          zip -r ../deploy.zip .
+          cd ..
+          echo "Deploy package size:"
+          ls -lh deploy.zip
+
+      # ─────────────────────────────────────────
+      # PASO 4: Subir a AWS Elastic Beanstalk
+      # Usa los secrets configurados en GitHub
+      # ─────────────────────────────────────────
+      - name: Deploy to Elastic Beanstalk
+        uses: einaregilsson/beanstalk-deploy@v22
+        with:
+          aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          application_name: ${{ secrets.EB_APPLICATION_NAME }}
+          environment_name: ${{ secrets.EB_ENVIRONMENT_NAME }}
+          version_label: ${{ github.sha }}-${{ github.run_number }}
+          region: ${{ secrets.AWS_REGION }}
+          deployment_package: deploy.zip
+          use_existing_version_if_available: true
+
+      # ─────────────────────────────────────────
+      # PASO 5: Smoke Test
+      # Verifica que la API responde correctamente
+      # Intenta 10 veces cada 15 segundos
+      # ─────────────────────────────────────────
+      - name: Smoke test deployed environment
+        run: |
+          URL="http://phoenix-backend-dev.eba-6mqfmmxf.us-east-1.elasticbeanstalk.com"
+          echo "Waiting for the API to respond at $URL ..."
+          for i in $(seq 1 10); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+            if [ "$STATUS" = "200" ] || [ "$STATUS" = "404" ]; then
+              echo "✅ Smoke test passed (HTTP $STATUS) - API is running"
+              exit 0
+            fi
+            echo "Attempt $i: got HTTP $STATUS, retrying in 15s..."
+            sleep 15
+          done
+          echo "❌ Smoke test failed: API did not respond"
+          exit 1
+
+      # ─────────────────────────────────────────
+      # PASO 6: Confirmación
+      # ─────────────────────────────────────────
+      - name: Deployment successful
+        run: |
+          echo "✅ Backend deployed successfully to Elastic Beanstalk!"
+          echo "URL: http://phoenix-backend-dev.eba-6mqfmmxf.us-east-1.elasticbeanstalk.com"
+          echo "Commit: ${{ github.sha }}"
+          echo "Run: ${{ github.run_number }}"
