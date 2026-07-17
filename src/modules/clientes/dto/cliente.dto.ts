@@ -3,13 +3,13 @@ import { z } from 'zod';
 export const createClienteSchema = z.object({
   fullName: z.string().trim().min(1, 'FullName es obligatorio'),
   email: z.string().trim().email('Email inválido'),
-  phone: z.string().trim().min(1).optional(),
+  phone: z.string().trim().nullable().optional(),
 });
 
 export const updateClienteSchema = z.object({
   fullName: z.string().trim().min(1, 'FullName es obligatorio').optional(),
   email: z.string().trim().email('Email inválido').optional(),
-  phone: z.string().trim().min(1).optional(),
+  phone: z.string().trim().nullable().optional(),
 });
 
 export const clienteIdParamSchema = z.object({
