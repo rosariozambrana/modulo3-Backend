@@ -15,6 +15,15 @@ export const createProductoSchema = z.object({
 export const updateProductoSchema = z.object({
   name: z.string().trim().min(1, 'Name es obligatorio').optional(),
   description: z.string().trim().optional(),
+  price: z
+    .number({ invalid_type_error: 'Price debe ser numérico' })
+    .positive('Price debe ser mayor que 0')
+    .optional(),
+  stock: z
+    .number({ invalid_type_error: 'Stock debe ser numérico' })
+    .int('Stock debe ser un entero')
+    .min(0, 'Stock no puede ser negativo')
+    .optional(),
 });
 
 export const updatePrecioStockSchema = z
