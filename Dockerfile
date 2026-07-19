@@ -1,5 +1,5 @@
 # ── Etapa 1: Compilar TypeScript ──────────────────────────────
-FROM node:20-slim AS builder
+FROM node:20-bullseye-slim AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ COPY src ./src
 RUN npm run build
 
 # ── Etapa 2: Imagen de producción ─────────────────────────────
-FROM node:20-slim AS production
+FROM node:20-bullseye-slim AS production
 
 WORKDIR /app
 
