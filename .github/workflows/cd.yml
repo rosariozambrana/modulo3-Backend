@@ -19,60 +19,37 @@ jobs:
         uses: actions/checkout@v4
 
       # ─────────────────────────────────────────
-      # PASO 1: Descargar el artefacto del CI
-      # El mismo .zip que generó el job build
+      # PASO 1: Crear Dockerrun.aws.json
+      # Le dice a Elastic Beanstalk qué imagen Docker usar
       # ─────────────────────────────────────────
-      - name: Download build artifact from CI
-        uses: actions/download-artifact@v4
-        with:
-          name: backend-dist
-          path: dist-output
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      # ─────────────────────────────────────────
-      # PASO 2: Preparar el paquete de deploy
-      # Estructura que AWS Elastic Beanstalk espera
-      # ─────────────────────────────────────────
-      - name: Prepare deployment package
+      - name: Prepare Docker deployment package
         run: |
-          mkdir -p deploy
+          SHORT_SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)
+          IMAGE="ghcr.io/${{ github.repository_owner }}/modulo3-backend:sha-${SHORT_SHA}"
+          echo "Deploying image: $IMAGE"
 
-          # Copiar código compilado
-          cp -r dist-output/dist deploy/dist
+          cat > Dockerrun.aws.json << EOF
+          {
+            "AWSEBDockerrunVersion": "1",
+            "Image": {
+              "Name": "${IMAGE}",
+              "Update": "true"
+            },
+            "Ports": [
+              {
+                "ContainerPort": "8080",
+                "HostPort": "80"
+              }
+            ]
+          }
+          EOF
 
-          # Copiar archivos de Prisma (esquema y migraciones)
-          cp -r dist-output/prisma deploy/prisma
-
-          # Copiar dependencias
-          cp dist-output/package.json deploy/package.json
-          cp dist-output/package-lock.json deploy/package-lock.json
-
-          # Crear Procfile: le dice a AWS cómo arrancar la app
-          # AWS leerá este archivo y ejecutará: node dist/server.js
-          echo "web: npm start" > deploy/Procfile
-
-          # Mostrar contenido del paquete de deploy
-          echo "=== Deployment package contents ==="
-          ls -la deploy/
-          echo "Compiled files in dist/:"
-          ls -la deploy/dist/
-
-      # ─────────────────────────────────────────
-      # PASO 3: Comprimir en .zip
-      # Elastic Beanstalk recibe un archivo .zip
-      # ─────────────────────────────────────────
-      - name: Generate deployment package
-        run: |
-          cd deploy
-          zip -r ../deploy.zip .
-          cd ..
-          echo "Deploy package size:"
-          ls -lh deploy.zip
+          cat Dockerrun.aws.json
+          zip deploy.zip Dockerrun.aws.json
 
       # ─────────────────────────────────────────
-      # PASO 4: Subir a AWS Elastic Beanstalk
-      # Usa los secrets configurados en GitHub
+      # PASO 2: Subir a Elastic Beanstalk
+      # EB descargará la imagen de ghcr.io y la correrá
       # ─────────────────────────────────────────
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v22
@@ -81,23 +58,22 @@ jobs:
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           application_name: ${{ secrets.EB_APPLICATION_NAME }}
           environment_name: ${{ secrets.EB_ENVIRONMENT_NAME }}
-          version_label: ${{ github.sha }}-${{ github.run_number }}
+          version_label: docker-${{ github.event.workflow_run.head_sha }}-${{ github.run_number }}
           region: ${{ secrets.AWS_REGION }}
           deployment_package: deploy.zip
           use_existing_version_if_available: true
 
       # ─────────────────────────────────────────
-      # PASO 5: Smoke Test
+      # PASO 3: Smoke Test
       # Verifica que la API responde correctamente
-      # Intenta 10 veces cada 15 segundos
       # ─────────────────────────────────────────
       - name: Smoke test deployed environment
         run: |
-          URL="http://phoenix-backend-dev.eba-6mqfmmxf.us-east-1.elasticbeanstalk.com"
+          URL="http://${{ secrets.EB_APP_URL }}"
           echo "Waiting for the API to respond at $URL ..."
           for i in $(seq 1 10); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
-            if [ "$STATUS" = "200" ] || [ "$STATUS" = "404" ]; then
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL/health" || echo "000")
+            if [ "$STATUS" = "200" ]; then
               echo "✅ Smoke test passed (HTTP $STATUS) - API is running"
               exit 0
             fi
@@ -107,12 +83,8 @@ jobs:
           echo "❌ Smoke test failed: API did not respond"
           exit 1
 
-      # ─────────────────────────────────────────
-      # PASO 6: Confirmación
-      # ─────────────────────────────────────────
       - name: Deployment successful
         run: |
-          echo "✅ Backend deployed successfully to Elastic Beanstalk!"
-          echo "URL: http://phoenix-backend-dev.eba-6mqfmmxf.us-east-1.elasticbeanstalk.com"
-          echo "Commit: ${{ github.sha }}"
-          echo "Run: ${{ github.run_number }}"
+          echo "✅ Backend deployed via Docker image!"
+          echo "Image: ghcr.io/${{ github.repository_owner }}/modulo3-backend:latest"
+          echo "URL: http://${{ secrets.EB_APP_URL }}"
