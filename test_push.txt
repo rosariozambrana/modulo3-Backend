@@ -1,0 +1,2 @@
+Este archivo se agregó para realizar un test de push.
+Fecha: 2026-07-20
