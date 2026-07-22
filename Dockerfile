@@ -1,13 +1,15 @@
 # ── Etapa 1: Compilar TypeScript ──────────────────────────────
-FROM node:20-bullseye-slim AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci
 
+
+# Instalamos dependencias y generamos el cliente de Prisma
+RUN npm install
 RUN npx prisma generate
 
 COPY tsconfig.json ./
@@ -16,18 +18,21 @@ COPY src ./src
 RUN npm run build
 
 # ── Etapa 2: Imagen de producción ─────────────────────────────
-FROM node:20-bullseye-slim AS production
+FROM node:20-alpine AS production
 
 WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=8080
 
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci --only=production && npx prisma generate
+
+# Solo instalamos dependencias de producción y compilamos Prisma
+RUN npm install --only=production && npx prisma generate
 
 COPY --from=builder /app/dist ./dist
-
-ENV NODE_ENV=production
 
 EXPOSE 8080
 
