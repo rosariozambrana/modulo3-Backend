@@ -13,7 +13,7 @@ import pedidoRoutes from './modules/pedidos/pedido.routes';
 export function createApp(): Application {
   const app = express();
 
-  
+
   app.use(
     helmet({
       contentSecurityPolicy: false,
@@ -24,7 +24,6 @@ export function createApp(): Application {
   if (env.nodeEnv !== 'test') {
     app.use(morgan('dev'));
   }
-
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
   app.get('/health', (_req, res) => {
