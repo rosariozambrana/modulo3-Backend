@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-
+RUN apk add --no-cache openssl
 
 # Instalamos dependencias y generamos el cliente de Prisma
 RUN npm install
@@ -28,6 +28,7 @@ ENV PORT=8080
 COPY package*.json ./
 COPY prisma ./prisma/
 
+RUN apk add --no-cache openssl || apk add --no-cache openssl || apk add --no-cache openssl
 
 # Solo instalamos dependencias de producción y compilamos Prisma
 RUN npm install --only=production && npx prisma generate
