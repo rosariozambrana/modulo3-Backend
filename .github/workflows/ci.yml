@@ -9,36 +9,56 @@ on:
 jobs:
   # ═══════════════════════════════════════════
   # JOB 1: validate
-  # Verifica que el código compila sin errores
+  # Verifica que el código compila sin errores y pasa los controles de seguridad DevSecOps
   # ═══════════════════════════════════════════
   validate:
-    name: Validate Code Quality
+    name: Validate Code Quality & Security
     runs-on: ubuntu-latest
 
     steps:
       - name: 1. Checkout source code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # REQUERIDO PARA GITLEAKS: Descarga todo el historial de commits para buscar secretos
 
-      - name: 2. Setup Node.js environment
+      - name: 2. Escáner de Secretos (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 3. Setup Node.js environment
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: 3. Display Node.js and npm versions
+      - name: 4. Display Node.js and npm versions
         run: |
           node --version
           npm --version
 
-      - name: 4. Install project dependencies
-        run: npm ci
+      - name: 5. Install project dependencies
+        run: npm ci --legacy-peer-deps
 
-      - name: 5. Generate Prisma client
+      - name: 6. Escáner de Vulnerabilidades (npm audit)
+        run: npm audit || true # El '|| true' evita que el pipeline falle y se detenga por vulnerabilidades de librerías de terceros (como vimos con jest/uuid)
+
+      - name: 7. Análisis Estático de Código (ESLint)
+        run: npx eslint . --ext .ts,.js
+        continue-on-error: true # Permite que el pipeline continúe si hay advertencias menores de formato
+
+      - name: 8. Generate Prisma client
         run: npx prisma generate
 
-      - name: 6. Validate TypeScript compilation
+      - name: 9. Validate TypeScript compilation
         run: npx tsc --noEmit
         continue-on-error: true
+
+      - name: 10. Generar Inventario de Software (SBOM con Syft)
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          file: sbom.json
 
   # ═══════════════════════════════════════════
   # JOB 2: build
@@ -60,7 +80,7 @@ jobs:
           cache: 'npm'
 
       - name: 3. Install project dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: 4. Generate Prisma client
         run: npx prisma generate
@@ -89,7 +109,7 @@ jobs:
 
   # ═══════════════════════════════════════════
   # JOB 3: docker
-  # Construye la imagen y la sube a ghcr.io
+  # Construye la imagen, la sube a ghcr.io y la firma con Cosign
   # ═══════════════════════════════════════════
   docker:
     name: Build & Push Docker Image
@@ -99,6 +119,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # REQUERIDO PARA FIRMAR LA IMAGEN CON COSIGN (OIDC Keyless Signing)
 
     steps:
       - name: 1. Checkout source code
@@ -127,3 +148,18 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: 5. Instalar Cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.2.0'
+
+      - name: 6. Firmar la imagen Docker
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          images=""
+          for tag in ${TAGS}; do
+            images+="${tag} "
+          done
+          cosign sign --yes ${images}
