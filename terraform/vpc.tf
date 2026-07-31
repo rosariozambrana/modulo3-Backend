@@ -117,7 +117,7 @@ resource "aws_security_group" "eb" {
   }
 
   egress {
-    description = "Todo el tráfico saliente permitido"
+    description = "Todo el trafico saliente permitido"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
