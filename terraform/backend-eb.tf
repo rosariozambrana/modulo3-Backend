@@ -15,7 +15,7 @@ resource "aws_elastic_beanstalk_application" "backend" {
 resource "aws_elastic_beanstalk_environment" "backend" {
   name                = "${var.app_name}-backend-${var.environment}"
   application         = aws_elastic_beanstalk_application.backend.name
-  solution_stack_name = "64bit Amazon Linux 2023 v4.4.1 running Docker"  # Plataforma Docker
+  solution_stack_name = "64bit Amazon Linux 2023 v4.13.5 running Docker"  # Plataforma Docker actual
 
   # ── Configuración de red ──
   setting {
