@@ -14,12 +14,71 @@ jobs:
     permissions:
       actions: read
 
+    env:
+      TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+      TF_VAR_backend_image: "ghcr.io/${{ github.repository_owner }}/modulo3-backend:latest"
+
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
 
       # ─────────────────────────────────────────
-      # PASO 1: Crear Dockerrun.aws.json
+      # PASO 1: Configurar credenciales AWS
+      # Terraform necesita acceso a AWS para crear recursos
+      # ─────────────────────────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # ─────────────────────────────────────────
+      # PASO 2: Instalar Terraform
+      # ─────────────────────────────────────────
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      # ─────────────────────────────────────────
+      # PASO 3: Terraform Init
+      # Descarga los plugins necesarios (proveedor AWS)
+      # ─────────────────────────────────────────
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+
+      # ─────────────────────────────────────────
+      # PASO 4: Terraform Plan
+      # Muestra qué recursos va a crear/modificar (sin crear aún)
+      # ─────────────────────────────────────────
+      - name: Terraform Plan
+        working-directory: ./terraform
+        run: terraform plan
+
+      # ─────────────────────────────────────────
+      # PASO 5: Terraform Apply
+      # CREA LA INFRAESTRUCTURA AUTOMATICAMENTE
+      # Si ya existe, la verifica y actualiza si es necesario
+      # ─────────────────────────────────────────
+      - name: Terraform Apply (Provisionar servidor)
+        working-directory: ./terraform
+        run: terraform apply -auto-approve
+
+      # ─────────────────────────────────────────
+      # PASO 6: Obtener nombre del ambiente EB desde Terraform
+      # Necesitamos la URL y nombre del ambiente para el deploy
+      # ─────────────────────────────────────────
+      - name: Get Terraform outputs
+        working-directory: ./terraform
+        id: tf_outputs
+        run: |
+          echo "backend_url=$(terraform output -raw backend_url)" >> $GITHUB_OUTPUT
+          echo "eb_env_name=$(terraform output -raw eb_environment_name 2>/dev/null || echo '${{ secrets.EB_ENVIRONMENT_NAME }}')" >> $GITHUB_OUTPUT
+
+      # ─────────────────────────────────────────
+      # PASO 7: Crear Dockerrun.aws.json
       # Le dice a Elastic Beanstalk qué imagen Docker usar
       # ─────────────────────────────────────────
       - name: Prepare Docker deployment package
@@ -48,7 +107,7 @@ jobs:
           zip deploy.zip Dockerrun.aws.json
 
       # ─────────────────────────────────────────
-      # PASO 2: Subir a Elastic Beanstalk
+      # PASO 8: Deploy a Elastic Beanstalk
       # EB descargará la imagen de ghcr.io y la correrá
       # ─────────────────────────────────────────
       - name: Deploy to Elastic Beanstalk
@@ -64,14 +123,13 @@ jobs:
           use_existing_version_if_available: true
 
       # ─────────────────────────────────────────
-      # PASO 3: Smoke Test
+      # PASO 9: Smoke Test
       # Verifica que la API responde correctamente
       # ─────────────────────────────────────────
       - name: Smoke test deployed environment
         run: |
-          # Limpiar URL de posibles prefijos http:// o https:// y barras diagonales
-          CLEAN_URL=$(echo "${{ secrets.EB_APP_URL }}" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
-          URL="http://$CLEAN_URL"
+          # La URL viene directamente del output de Terraform — no necesitas actualizarla manualmente
+          URL="${{ steps.tf_outputs.outputs.backend_url }}"
           echo "Waiting for the API to respond at $URL ..."
           for i in $(seq 1 10); do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL/health" || echo "000")
@@ -87,8 +145,7 @@ jobs:
 
       - name: Deployment successful
         run: |
-          # Limpiar URL para el log de éxito
-          CLEAN_URL=$(echo "${{ secrets.EB_APP_URL }}" | sed -e 's|^[^/]*//||' -e 's|/.*$||')
-          echo "✅ Backend deployed via Docker image!"
+          # La URL viene directamente del output de Terraform
+          echo "✅ Backend deployed via Docker image con IaC!"
           echo "Image: ghcr.io/${{ github.repository_owner }}/modulo3-backend:latest"
-          echo "URL: http://$CLEAN_URL"
+          echo "URL: ${{ steps.tf_outputs.outputs.backend_url }}"
