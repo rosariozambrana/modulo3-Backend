@@ -30,8 +30,10 @@ COPY prisma ./prisma/
 
 RUN apk add --no-cache openssl || apk add --no-cache openssl || apk add --no-cache openssl
 
-# Solo instalamos dependencias de producción y compilamos Prisma
-RUN npm install --only=production && npx prisma generate
+# Solo instalamos dependencias de producción
+# El cliente de Prisma lo copiamos desde la etapa builder (ya fue generado allí)
+RUN npm install --only=production
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 COPY --from=builder /app/dist ./dist
 
