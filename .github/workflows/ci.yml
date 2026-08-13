@@ -175,4 +175,4 @@ jobs:
         run: |
           aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name exciting-gopher-1786590509
           kubectl rollout restart deployment/backend
-          kubectl rollout status deployment/backend --timeout=120s
+          kubectl rollout status deployment/backend --timeout=300s

@@ -15,6 +15,11 @@ metadata:
 
 spec:
   replicas: 1              # 1 replica para encajar en el grupo de nodos t3.micro
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
 
   # Le dice al Deployment cuales Pods son "suyos"
   # Debe coincidir EXACTAMENTE con los labels del template de abajo
