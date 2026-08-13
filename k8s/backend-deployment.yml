@@ -1,37 +1,24 @@
-# ============================================================
-# BACKEND DEPLOYMENT
-# ------------------------------------------------------------
-# Un Deployment le dice a Kubernetes:
-#   "Quiero que mantengas SIEMPRE 2 copias de este contenedor
-#    corriendo con esta imagen Docker"
-#
-# Si un contenedor muere, Kubernetes lo reinicia solo.
-# ============================================================
-
-apiVersion: apps/v1        # Version de la API de Kubernetes para Deployments
-kind: Deployment           # Tipo de objeto: Deployment
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: backend            # Nombre del deployment (identificador en el cluster)
+  name: backend
 
 spec:
-  replicas: 1              # 1 replica para encajar en el grupo de nodos t3.micro
+  replicas: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 0
       maxUnavailable: 1
 
-  # Le dice al Deployment cuales Pods son "suyos"
-  # Debe coincidir EXACTAMENTE con los labels del template de abajo
   selector:
     matchLabels:
       app: backend
 
-  # Esta es la "receta" del contenedor que Kubernetes va a crear
   template:
     metadata:
       labels:
-        app: backend       # Etiqueta que identifica este Pod
+        app: backend
 
     spec:
       containers:
@@ -39,9 +26,8 @@ spec:
           image: ghcr.io/rosariozambrana/modulo3-backend:latest
 
           ports:
-            - containerPort: 8080    # Puerto en el que corre la app
+            - containerPort: 8080
 
-          # Variables de entorno (equivalente al archivo .env)
           env:
             - name: PORT
               value: "8080"
@@ -52,11 +38,9 @@ spec:
             - name: CORS_ORIGIN
               value: "*"
 
-            # IMPORTANTE: Reemplaza con la URL real de tu RDS en AWS
             - name: DATABASE_URL
               value: "postgresql://postgres:TU_PASSWORD@TU_HOST_RDS.us-east-1.rds.amazonaws.com:5432/postgres?schema=public"
 
-          # Cuanta CPU y memoria puede usar este contenedor
           resources:
             requests:
               memory: "128Mi"
@@ -65,7 +49,6 @@ spec:
               memory: "256Mi"
               cpu: "500m"
 
-          # Kubernetes verifica si el contenedor esta LISTO para recibir trafico
           readinessProbe:
             httpGet:
               path: /health
@@ -73,7 +56,6 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
 
-          # Kubernetes verifica si el contenedor sigue VIVO (lo reinicia si falla)
           livenessProbe:
             httpGet:
               path: /health

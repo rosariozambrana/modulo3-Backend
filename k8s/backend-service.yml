@@ -1,26 +1,15 @@
-﻿# ============================================================
-# BACKEND SERVICE - tipo LoadBalancer
-# ------------------------------------------------------------
-# Un Service expone tu Deployment al exterior.
-# Tipo LoadBalancer en AWS crea automaticamente un 
-# Elastic Load Balancer (ELB) con una URL publica.
-# ============================================================
-
 apiVersion: v1
 kind: Service
 metadata:
-  name: backend-service    # Nombre del servicio
+  name: backend-service
 
 spec:
-  # LoadBalancer: AWS crea un ELB automaticamente y te da una URL publica
   type: LoadBalancer
 
-  # Conecta este Service con los Pods que tengan el label app: backend
-  # Debe coincidir con los labels del Deployment de arriba
   selector:
     app: backend
 
   ports:
     - protocol: TCP
-      port: 80              # Puerto por el que el mundo exterior accede
-      targetPort: 8080      # Puerto interno del contenedor (donde corre Express)
+      port: 80
+      targetPort: 8080
